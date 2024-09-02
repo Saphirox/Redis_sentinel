@@ -1,0 +1,78 @@
+version: '3'
+
+services:
+    redis-master:
+        image: redis:latest
+        command: redis-server --maxmemory 10mb --maxmemory-policy ${EVICTION_POLICY}
+
+    redis-slave-1:
+        image: redis:latest
+        command: redis-server --replicaof redis-master 6379 --maxmemory 10mb --maxmemory-policy ${EVICTION_POLICY}
+        links:
+            - redis-master
+
+    redis-slave-2:
+        image: redis:latest
+        command: redis-server --replicaof redis-master 6379 --maxmemory 10mb --maxmemory-policy ${EVICTION_POLICY}
+        links:
+            - redis-master
+
+    sentinel-1:
+        build: sentinel
+        environment:
+            - SENTINEL_DOWN_AFTER=5000
+            - SENTINEL_FAILOVER=500
+            - SENTINEL_QUORUM=2
+        depends_on:
+            - redis-master
+            - redis-slave-1
+            - redis-slave-2
+
+    sentinel-2:
+        build: sentinel
+        environment:
+            - SENTINEL_DOWN_AFTER=5000
+            - SENTINEL_FAILOVER=500
+            - SENTINEL_QUORUM=2
+        depends_on:
+            - redis-master
+            - redis-slave-1
+            - redis-slave-2
+
+    sentinel-3:
+        build: sentinel
+        environment:
+            - SENTINEL_DOWN_AFTER=5000
+            - SENTINEL_FAILOVER=500
+            - SENTINEL_QUORUM=2
+        depends_on:
+            - redis-master
+            - redis-slave-1
+            - redis-slave-2
+
+    redis_cluster_app:
+        build: app
+        environment:
+          - SENTINEL_DOWN_AFTER=5000
+          - SENTINEL_FAILOVER=500
+          - SENTINEL_QUORUM=2
+        ports:
+            - "8008:8008"
+        depends_on:
+            - redis-master
+            - redis-slave-1
+            - redis-slave-2
+        volumes:
+            - ./app:/usr/src/app/redis_app/
+
+    redisinsight:
+        image: redis/redisinsight:latest
+        container_name: redisinsight
+        ports:
+          - "5540:5540"
+        depends_on:
+            - redis-master
+            - redis-slave-1
+            - redis-slave-2
+        links:
+            - redis-master
